@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robustness Testing</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/">DWT-SVD</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/embed">Embed</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/extract">Extract</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/robustness">Robustness</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/results">Results</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <h2 class="mb-4">Robustness Testing</h2>
+                <form id="robustness-form" enctype="multipart/form-data">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Watermarked image</label>
+                            <input class="form-control" type="file" name="watermarked" accept=".png,.jpg,.jpeg,.bmp" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Original cover image</label>
+                            <input class="form-control" type="file" name="cover" accept=".png,.jpg,.jpeg,.bmp" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Original watermark</label>
+                            <input class="form-control" type="file" name="watermark" accept=".png,.jpg,.jpeg,.bmp">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Wavelet</label>
+                            <select class="form-select" name="wavelet">
+                                <option value="haar" selected>Haar</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Level</label>
+                            <input class="form-control" type="number" name="level" value="1" min="1" max="3">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Subband</label>
+                            <select class="form-select" name="subband">
+                                <option value="LL" selected>LL</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Strength</label>
+                            <input class="form-control" type="number" name="alpha" step="0.01" value="0.05">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Optional key</label>
+                            <input class="form-control" type="text" name="key" placeholder="same as embedding">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary mt-4" type="submit">Run Robustness Analysis</button>
+                </form>
+                <div id="robustness-status" class="mt-4"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

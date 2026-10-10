@@ -1,0 +1,74 @@
+:root {
+    --navy: #111827;
+    --blue: #2563eb;
+    --violet: #7c3aed;
+    --light: #f8fafc;
+    --shadow: rgba(15, 23, 42, 0.08);
+}
+
+body {
+    background: linear-gradient(180deg, #f5f7fb 0%, #eef4ff 100%);
+    color: var(--navy);
+    font-family: Arial, sans-serif;
+}
+
+.navbar {
+    background: linear-gradient(90deg, #0f172a 0%, #1d4ed8 100%) !important;
+}
+
+.hero-card, .feature-card, .workflow-card, .card {
+    border-radius: 18px;
+    box-shadow: 0 12px 30px var(--shadow);
+}
+
+.eyebrow {
+    color: var(--blue);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    font-size: 0.72rem;
+}
+
+.workflow {
+    font-weight: 600;
+    color: var(--navy);
+}
+
+.workflow span {
+    background: rgba(37, 99, 235, 0.08);
+    border-radius: 999px;
+    padding: 0.55rem 0.9rem;
+}
+
+.form-control, .form-select {
+    border-radius: 12px;
+    padding: 0.75rem 0.85rem;
+}
+
+.btn-primary {
+    background: linear-gradient(90deg, var(--blue), var(--violet));
+    border: none;
+    border-radius: 12px;
+}
+
+.status-box {
+    background: #f1f5f9;
+    border-left: 4px solid var(--blue);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+#results-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#results-table th, #results-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
