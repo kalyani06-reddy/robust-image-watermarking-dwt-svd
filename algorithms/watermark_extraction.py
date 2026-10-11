@@ -3,14 +3,26 @@ import time
 import numpy as np
 
 from algorithms.dwt_transform import dwt_decompose, reconstruct_from_subbands
-from algorithms.svd_embedding import svd_extract_subband
+from algorithms.svd_embedding import prepare_watermark_matrix, svd_extract_subband
 from utils.image_utils import ensure_uint8
 from utils.metrics import bit_error_rate, normalized_correlation
 
 
-def extract_watermark(watermarked_image, original_cover, wavelet="haar", level=1, subband="LL", alpha=0.05, key="", original_watermark=None):
+def extract_watermark(
+    watermarked_image,
+    original_cover,
+    wavelet="haar",
+    level=1,
+    subband="LL",
+    alpha=0.05,
+    key="",
+    original_watermark=None,
+    watermark_type="grayscale",
+):
     if original_cover is None:
         raise ValueError("Original cover image is required for non-blind extraction.")
+    if original_watermark is None:
+        raise ValueError("Reference watermark is required to restore its dimensions and evaluate recovery.")
 
     wm = np.asarray(watermarked_image, dtype=np.float64)
     cover = np.asarray(original_cover, dtype=np.float64)
@@ -18,32 +30,44 @@ def extract_watermark(watermarked_image, original_cover, wavelet="haar", level=1
         wm = np.mean(wm, axis=2)
     if cover.ndim == 3:
         cover = np.mean(cover, axis=2)
+    if wm.ndim != 2 or cover.ndim != 2 or wm.size == 0 or cover.size == 0:
+        raise ValueError("Watermarked and original cover images must be non-empty grayscale or color arrays.")
+    if wm.shape != cover.shape:
+        raise ValueError("Watermarked image and original cover must have identical dimensions.")
+    if not np.all(np.isfinite(wm)) or not np.all(np.isfinite(cover)):
+        raise ValueError("Watermarked and original cover images must contain only finite values.")
+    if subband not in ("LL", "LH", "HL", "HH"):
+        raise ValueError(f"Unsupported subband: {subband}")
+    if isinstance(level, bool) or not isinstance(level, (int, np.integer)):
+        raise ValueError("Decomposition level must be a positive integer.")
+
+    ref = np.asarray(original_watermark, dtype=np.float64)
+    if ref.ndim == 3:
+        ref = np.mean(ref, axis=2)
+    if ref.ndim != 2 or ref.size == 0 or not np.all(np.isfinite(ref)):
+        raise ValueError("Reference watermark must be a non-empty, finite grayscale or color image.")
+    if np.min(ref) < 0 or np.max(ref) > 255:
+        raise ValueError("Reference watermark pixel values must be in the range 0 to 255.")
 
     start = time.perf_counter()
-    cover_subbands = dwt_decompose(cover, wavelet)
-    wm_subbands = dwt_decompose(wm, wavelet)
+    cover_subbands = dwt_decompose(cover, wavelet, level)
+    wm_subbands = dwt_decompose(wm, wavelet, level)
     cover_subband = cover_subbands[subband]
     wm_subband = wm_subbands[subband]
 
-    recovered_matrix = svd_extract_subband(wm_subband, cover_subband, alpha=alpha, key=key)
-    recovered_uint8 = ensure_uint8(recovered_matrix)
+    recovered_vector = svd_extract_subband(
+        wm_subband,
+        cover_subband,
+        alpha=alpha,
+        key=key,
+        watermark_size=ref.size,
+    )
+    recovered_matrix = recovered_vector.reshape(ref.shape)
+    recovered_uint8 = ensure_uint8(recovered_matrix * 255.0)
 
-    if original_watermark is not None:
-        ref = np.asarray(original_watermark, dtype=np.float64)
-        if ref.ndim == 3:
-            ref = np.mean(ref, axis=2)
-        ref = ref.reshape(-1)
-        recovered_vector = np.asarray(recovered_matrix, dtype=np.float64).reshape(-1)
-        if ref.size != recovered_vector.size:
-            indices = np.linspace(0, ref.size - 1, recovered_vector.size, dtype=int)
-            ref = ref[indices]
-        target = np.clip(ref / 255.0, 0.0, 1.0)
-        nc = normalized_correlation(target, recovered_vector)
-        ber = bit_error_rate(target, recovered_vector)
-    else:
-        recovered_vector = np.asarray(recovered_matrix, dtype=np.float64).reshape(-1)
-        nc = normalized_correlation(recovered_vector, recovered_vector)
-        ber = 0.0
+    target = prepare_watermark_matrix(ref, watermark_type=watermark_type)
+    nc = normalized_correlation(target, recovered_vector)
+    ber = bit_error_rate(target, recovered_vector)
 
     elapsed_ms = (time.perf_counter() - start) * 1000.0
     return {
@@ -57,5 +81,7 @@ def extract_watermark(watermarked_image, original_cover, wavelet="haar", level=1
             "subband": subband,
             "alpha": float(alpha),
             "key": bool(key),
+            "watermark_shape": list(ref.shape),
+            "watermark_type": watermark_type,
         },
     }

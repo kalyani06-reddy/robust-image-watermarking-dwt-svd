@@ -9,72 +9,52 @@
 **Supervisor:** [Supervisor name]  
 **Submission date:** [Date]
 
-> Replace the bracketed institutional details before submission. This report describes the code currently in this repository. It does not claim unmeasured robustness, perfect extraction, cryptographic security, or production readiness.
+> Replace the bracketed institutional details before submission. Results in this report are from one deterministic synthetic demonstration. They are not a dataset benchmark or a claim of general robustness.
 
 ## Abstract
 
-Digital image watermarking embeds ownership or authenticity information into image data so that it can later be detected or recovered. This project implements a web-based grayscale watermarking prototype using the Discrete Wavelet Transform (DWT) and Singular Value Decomposition (SVD). A Flask application accepts a cover image and watermark, transforms the cover into wavelet subbands, modifies singular values in a selected subband, and reconstructs an output image. A non-blind extraction path compares singular values from the watermarked image with those from the original cover image. The project also contains functions for common image-processing attacks and utilities for image-quality and watermark-comparison metrics.
+This project implements a grayscale image watermarking prototype using a multilevel Discrete Wavelet Transform (DWT) and Singular Value Decomposition (SVD). Each normalized watermark pixel modifies the largest singular value of a separate 2×2 block in a selected wavelet subband. The Flask application supports embedding, non-blind reference-based extraction, common image attacks, image-quality and watermark metrics, previews, charts, and CSV export.
 
-The current implementation is intentionally described with its limitations. It applies a single-level DWT even though a decomposition-level setting is exposed. The watermark is flattened and sampled to the length of the singular-value vector; consequently, extraction produces a vector and does not reconstruct the uploaded watermark's two-dimensional geometry. Without a reference watermark, the extraction path's displayed NC/BER values are not valid recovery metrics. The robustness API also requires additional integration and validation before it can be used to support conclusions about attack resistance. The tests pass their present assertions, but those assertions do not establish research-grade watermark recovery or robustness.
+Unlike a vector-sampling scheme, the current method retains the watermark's dimensions and rejects payloads that exceed band capacity. Extraction requires the exact original cover and reference watermark, together with matching algorithm settings. The tests verify clean recovery on generated data, but the block grid has no synchronization or error correction. Example attack measurements show varying recovery and severe degradation under some transformations. Those results illustrate this configuration only; they do not establish general attack resistance.
 
-**Keywords:** digital watermarking, DWT, SVD, image processing, non-blind extraction, PSNR, SSIM
+**Keywords:** digital watermarking, DWT, SVD, non-blind extraction, PSNR, SSIM, normalized correlation, BER
 
 ## 1. Introduction
 
-Digital images are copied, shared, edited, and recompressed with little friction. A watermark is additional information embedded in a host image to support tasks such as ownership identification, content tracing, or integrity workflows. A useful watermarking method aims to balance two competing properties: the embedded signal should not visibly damage the cover image, and it should remain detectable after expected image transformations.
+Digital image watermarking inserts auxiliary information into a host image. Transform-domain approaches alter coefficients representing spatial frequency information rather than directly replacing pixels. This project combines a wavelet transform, which separates approximation and directional detail bands, with SVD, which represents a matrix through orthogonal singular vectors and singular values.
 
-Transform-domain methods modify image coefficients rather than directly changing individual spatial pixels. The DWT separates an image into frequency-oriented subbands. SVD represents a matrix through orthogonal singular vectors and non-negative singular values. Combining these tools provides a convenient experimental framework for studying image quality and watermark changes under different conditions.
+The application is an educational experiment tool. It is not a production ownership, authentication, cryptographic, or legal-proof system. Its purpose is to make the embedding, extraction, and measurement steps explicit and reproducible for a controlled demonstration.
 
-This project provides an educational implementation and browser interface. It should not be treated as an evaluated copyright-protection product: attack resistance depends on a complete, reproducible algorithm and properly measured experiments, which remain further work for this codebase.
+### 1.1 Aim and objectives
 
-### 1.1 Problem statement
+The aim is to implement and evaluate a DWT-SVD grayscale watermarking prototype. Objectives are to:
 
-The project investigates how to embed a grayscale watermark into a cover image using wavelet and singular-value operations, then recover watermark information with the original cover image as side information. The practical questions are whether the image can be reconstructed with limited visual distortion and how image transformations affect recovery.
+- embed watermark samples while preserving the original watermark dimensions;
+- recover the watermark using the original cover and matching configuration;
+- calculate image quality and reference-based watermark metrics;
+- execute selected image attacks and record actual extraction results;
+- expose the workflow through the existing Flask interface; and
+- test expected behavior, including invalid inputs and failed comparisons.
 
-### 1.2 Aim
+### 1.2 Scope
 
-To implement and document a DWT-SVD-based grayscale image watermarking prototype with a Flask interface and basic quality/attack evaluation utilities.
-
-### 1.3 Objectives
-
-- Convert uploaded cover and watermark images to grayscale.
-- Transform the cover image with a 2D DWT and select a subband.
-- Modify the selected subband's singular values using a strength parameter.
-- Reconstruct and save a watermarked image.
-- Implement non-blind extraction using the original cover image.
-- Provide attack operators and image/watermark metric utilities.
-- Expose the workflow through Flask pages and API routes.
-- Test core functions with generated arrays and document limitations.
-
-### 1.4 Scope
-
-The application is a single-host research prototype. It accepts PNG, JPEG, and BMP files subject to a configured request-size limit and processes them as grayscale. The extraction algorithm is non-blind. Current code uses one-level `pywt.dwt2`; the `level` parameter is recorded and displayed but does not control a multilevel decomposition. The watermark representation is reduced to a vector whose length equals the singular-value count of the selected subband.
+Inputs are grayscale-converted PNG, JPEG, or BMP images. The request limit is 16 MiB and decoded image limit is 16 megapixels. Extraction is non-blind. It requires the exact original cover, reference watermark, wavelet, decomposition level, subband, embedding strength, watermark type, and optional key used during embedding.
 
 ## 2. Background
 
-### 2.1 Digital image watermarking
+### 2.1 Discrete Wavelet Transform
 
-A watermarking system generally consists of an embedder and a detector or extractor. The embedder combines a cover image and watermark under an algorithm and optional key. The extractor analyzes a possibly modified image and may also need the original cover, a key, or configuration metadata. A system is **blind** if it does not require the original cover during extraction; it is **non-blind** if the cover is required. This project is non-blind.
+A \(J\)-level 2D DWT represents an image by an approximation band at level \(J\) and directional detail bands at each level. This implementation lets the user select LL, LH, HL, or HH at the chosen level. The decomposition uses PyWavelets' symmetric boundary mode and reconstruction crops the result to the source dimensions. The wavelet and level must match during embedding and extraction.
 
-### 2.2 Discrete Wavelet Transform
+### 2.2 Singular Value Decomposition
 
-A 2D DWT decomposes an image into an approximation band and detail bands. For a one-level decomposition the implementation names the returned bands LL, LH, HL, and HH. LL contains coarser approximation information, while the other bands represent directional details. Embedding in low-frequency information can survive some compression or filtering better, but may be more visually noticeable. Detail-band embedding may reduce visible impact in some cases but can be more vulnerable to processing that removes high-frequency components. These are general trade-offs, not measured guarantees for this application.
-
-The code calls `pywt.dwt2(image, wavelet)` once. Reconstruction calls `pywt.idwt2` with the modified and unchanged bands.
-
-### 2.3 Singular Value Decomposition
-
-For a real matrix $A$ with dimensions $m \times n$, SVD gives:
+For a real matrix \(A\in\mathbb{R}^{m\times n}\), SVD gives:
 
 $$
-A = U \Sigma V^T
+A=U\Sigma V^T,
 $$
 
-where $U$ and $V$ are orthogonal (or have orthonormal columns) and $\Sigma$ contains the singular values. In this implementation, NumPy computes a reduced SVD of the selected wavelet band.
-
-### 2.4 Related concepts
-
-DWT and SVD are established mathematical tools used in transform-domain image processing. This report does not present a systematic literature review or claim that the present prototype improves on published algorithms. Future academic work should compare a fully specified method against peer-reviewed baselines using fixed datasets, attacks, and parameter settings.
+where \(U\) and \(V\) are orthogonal (or have orthonormal columns) and \(\Sigma\) contains non-negative singular values. The application applies reduced SVD independently to small blocks of the selected DWT band.
 
 ## 3. System Design
 
@@ -82,207 +62,218 @@ DWT and SVD are established mathematical tools used in transform-domain image pr
 
 ```mermaid
 flowchart LR
-    Browser[Browser UI] --> Flask[Flask routes]
-    Flask --> ImageIO[Image loading and validation]
-    ImageIO --> Embed[Embedding and extraction modules]
-    Embed --> DWT[DWT subband transform]
-    DWT --> SVD[SVD singular-value modification]
-    SVD --> IDWT[Inverse DWT reconstruction]
-    IDWT --> Output[Saved output image]
-    Flask --> Metrics[PSNR / SSIM / NC / BER utilities]
-    Flask --> Attacks[Robustness attack functions]
+    Browser[Existing Flask UI] --> Routes[Flask API routes]
+    Routes --> ImageIO[Image validation and grayscale decode]
+    ImageIO --> DWT[Multilevel DWT]
+    DWT --> Blocks[2x2 band blocks]
+    Blocks --> SVD[SVD coefficient embedding/extraction]
+    SVD --> IDWT[Inverse DWT]
+    IDWT --> Outputs[Generated image previews/downloads]
+    Routes --> Metrics[PSNR, SSIM, NC, BER]
+    Routes --> Attacks[Attack operators and experiment records]
+    Attacks --> CSV[Session results and CSV export]
 ```
 
-### 3.2 Main components
+### 3.2 Main modules
 
-| Component | Responsibility |
+| File or folder | Responsibility |
 |---|---|
-| `app.py` | Flask pages, API handlers, output downloads |
-| `config.py` | Upload/output folders, accepted extensions, request-size cap |
-| `algorithms/dwt_transform.py` | One-level DWT decomposition and inverse reconstruction |
-| `algorithms/svd_embedding.py` | Watermark vector preparation, optional deterministic permutation, SVD embedding/extraction |
-| `algorithms/watermark_embedding.py` | Embed pipeline and cover-quality metrics |
-| `algorithms/watermark_extraction.py` | Non-blind extraction and optional reference comparison |
-| `algorithms/robustness.py` | Image attack operators and attack-loop wrapper |
-| `utils/metrics.py` | PSNR, SSIM, normalized correlation, BER |
-| `utils/image_utils.py` | Grayscale file loading, conversion, and output saving |
-| `templates/`, `static/` | Browser pages, styles, and form JavaScript |
-| `tests/` | Pytest checks using generated images |
+| `app.py` | Flask pages, API routes, generated image previews/downloads, CSV export |
+| `config.py` | Upload/output locations, supported formats, request-size limit |
+| `algorithms/dwt_transform.py` | Multilevel DWT decomposition and inverse reconstruction |
+| `algorithms/svd_embedding.py` | Block-SVD embedding/extraction, payload validation, key permutation |
+| `algorithms/watermark_embedding.py` | Watermark embedding pipeline and cover-quality calculation |
+| `algorithms/watermark_extraction.py` | Non-blind extraction and reference-based comparison |
+| `algorithms/robustness.py` | Attack operators and per-attack extraction experiments |
+| `utils/metrics.py` | Validated PSNR, SSIM, normalized correlation, BER |
+| `utils/image_utils.py` | Image decoding, grayscale conversion, and saving |
+| `templates/`, `static/` | Browser pages, styling, preview rendering, charts |
+| `tests/` | Algorithm, metric, robustness, and Flask tests |
 
-### 3.3 Data flow
+## 4. Embedding and Extraction Method
 
-For embedding, the browser posts image files and settings to `/api/embed`. The backend decodes both images as grayscale arrays, invokes the embedding function, writes a PNG into the output folder, and returns metrics and a download URL. For extraction, `/api/extract` receives a watermarked image plus the original cover and settings. The algorithm extracts a singular-value difference vector and saves it as an output image. The robustness route dispatches attack specifications to attack functions and invokes extraction on each attacked output.
+### 4.1 Preparation
 
-## 4. Methodology and Mathematical Formulation
+Let cover \(I\in[0,255]^{H\times W}\) and watermark \(W\in[0,255]^{H_W\times W_W}\) be grayscale images. Grayscale watermark samples are normalized as \(w_i=W_i/255\). In binary mode, the watermark is thresholded at its mean and converted to zero/one values. There is no vector truncation, sample repetition, or silent watermark resize.
 
-### 4.1 Preprocessing
+### 4.2 DWT band and capacity
 
-Let the grayscale cover be $I \in [0,255]^{H \times W}$ and watermark be $W_0$. The image loader converts uploaded files to grayscale. The cover is converted to floating-point values for processing. The watermark is flattened, then sampled at evenly spaced indices if its element count differs from the singular-value vector length. This is a simple capacity reduction, not a block-SVD watermark tiling scheme; spatial watermark structure is therefore not preserved exactly.
-
-### 4.2 DWT decomposition
-
-The code obtains a single-level decomposition:
+The cover is decomposed to the selected level \(J\), giving selected band \(A\in\mathbb{R}^{r\times c}\). Starting at the top-left, the implementation partitions \(A\) into non-overlapping 2×2 blocks. The number of usable blocks, and therefore the maximum number of watermark samples, is:
 
 $$
-(I_{LL}, I_{LH}, I_{HL}, I_{HH}) = \operatorname{DWT2}(I)
+C=\left\lfloor\frac{r}{2}\right\rfloor
+  \left\lfloor\frac{c}{2}\right\rfloor.
 $$
 
-The selected band $A$ is chosen from LL, LH, HL, or HH. The function accepts a wavelet name, with Haar as the default.
+If \(H_WW_W>C\), embedding rejects the request with a capacity error. Incomplete rows or columns at the band boundary remain unchanged.
 
-### 4.3 SVD-domain embedding
+### 4.3 Block-SVD embedding
 
-The selected band is decomposed:
-
-$$
-A = U \operatorname{diag}(s) V^T
-$$
-
-The preprocessed watermark vector is normalized to $w_i \in [0,1]$. Optional key-dependent scrambling applies a deterministic permutation $\pi$ to the vector. The modified singular values are:
+For watermark sample \(w_i\), let its corresponding block be:
 
 $$
-s_i' = s_i + \alpha w_{\pi(i)}
+B_i=U_i
+\begin{bmatrix}
+\sigma_{i,1}&0\\
+0&\sigma_{i,2}
+\end{bmatrix}V_i^T,
+\qquad \sigma_{i,1}\geq\sigma_{i,2}\geq0.
 $$
 
-where $\alpha$ is the embedding-strength parameter. Without a key, $\pi$ is the identity. The modified band is reconstructed as:
+Embedding strength is \(0<\alpha\leq0.3\). The modified singular values are:
 
 $$
-A' = U \operatorname{diag}(s') V^T
+\sigma'_{i,1}=\sigma_{i,1}+192\alpha w_{\pi(i)},\qquad
+\sigma'_{i,2}=\sigma_{i,2}.
 $$
 
-The implementation adds the normalized vector to the diagonal singular-value matrix; it does not add a 2D image directly to a 1D singular-value array.
-
-### 4.4 Inverse transform
-
-The code replaces the selected wavelet band by $A'$ and applies the inverse DWT:
+The block is reconstructed as:
 
 $$
-I_w = \operatorname{IDWT2}(I_{LL}', I_{LH}', I_{HL}', I_{HH}')
+B'_i=U_i
+\begin{bmatrix}
+\sigma'_{i,1}&0\\
+0&\sigma'_{i,2}
+\end{bmatrix}V_i^T.
 $$
 
-The reconstructed samples are clipped to the 8-bit range and converted to unsigned 8-bit values before saving.
+If there is no key, \(\pi\) is the identity. If a key is given, it seeds a deterministic NumPy permutation using a SHA-256 digest. The selected band is reconstructed with the modified blocks, then an inverse DWT reconstructs and clips the 8-bit watermarked output.
 
-### 4.5 Extraction
+### 4.4 Non-blind extraction
 
-Given watermarked image $I_w$ and original cover $I$, the implementation decomposes both using the same wavelet and selects the corresponding bands. It computes their singular values $s_w$ and $s$ and estimates:
-
-$$
-\hat{w}_i = \operatorname{clip}\left(\frac{s_{w,i} - s_i}{\alpha}, 0, 1\right)
-$$
-
-If a key is used, the implementation regenerates and reverses the deterministic permutation. Extraction requires the original cover and matching embedding parameters. The current return value is a 1D singular-value-length vector; it is not reshaped using stored watermark dimensions. As a result, this implementation does not support a meaningful claim of exact reconstruction of the uploaded 2D watermark.
-
-### 4.6 Key handling
-
-The key is hashed with SHA-256 and the first eight digest bytes initialize NumPy's `default_rng`, which makes the permutation reproducible. This generator is designed for numerical pseudorandom tasks, not cryptographic security. The key is not a substitute for authenticated encryption or a cryptographic watermark protocol. The application should not be used to protect sensitive secrets.
-
-## 5. Evaluation Metrics
-
-### 5.1 PSNR
-
-For cover image $I$ and watermarked image $I_w$ with mean squared error $\operatorname{MSE}$, the implementation uses an 8-bit maximum value:
+Extraction decomposes the watermarked image and original cover with matching settings and follows the same block ordering. With \(N=H_WW_W\):
 
 $$
-\operatorname{PSNR} = 10 \log_{10}\left(\frac{255^2}{\operatorname{MSE}}\right)
+\hat w_{\pi(i)}=
+\operatorname{clip}\left(
+\frac{\sigma^{(w)}_{i,1}-\sigma^{(c)}_{i,1}}{192\alpha},
+0,1
+\right), \qquad 0\leq i<N.
 $$
 
-When MSE is zero, the mathematical result is infinite. PSNR should be calculated on aligned arrays of the same dimensions and range.
+The permutation is inverted when a key was supplied, and the resulting vector is reshaped to \(H_W\times W_W\) using the uploaded reference watermark dimensions. The same reference is then compared with the extracted sample array. Extraction without the original cover or reference watermark is rejected.
 
-### 5.2 SSIM
+### 4.5 Limitations of the method
 
-SSIM is calculated using scikit-image's `structural_similarity` with a data range derived from the input arrays. It compares local luminance, contrast, and structure. It should be interpreted together with visual inspection and other measures.
+The coefficient difference is affected by inverse-DWT reconstruction, 8-bit quantization, clipping, image formats, and attacks. More strength improves the coefficient signal relative to quantization but may increase visible distortion. Each watermark pixel consumes one block, so capacity is limited. The fixed row-major block grid has no synchronization mechanism or error correction; cropping and geometric rescaling can misalign every subsequent block. Key-based scrambling is reproducible obfuscation, not encryption.
 
-### 5.3 NC and BER
+## 5. Evaluation Method
 
-The utility named NC computes a mean-centered, normalized dot product:
+### 5.1 Image quality
+
+PSNR between aligned 8-bit grayscale images \(X\) and \(Y\) is:
 
 $$
-\operatorname{NC}(x,y) = \frac{\sum_i (x_i-\bar{x})(y_i-\bar{y})}{\sqrt{\sum_i(x_i-\bar{x})^2}\sqrt{\sum_i(y_i-\bar{y})^2}}
+\operatorname{MSE}(X,Y)=\frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W}(X_{ij}-Y_{ij})^2,
+\qquad
+\operatorname{PSNR}=10\log_{10}\frac{255^2}{\operatorname{MSE}}.
 $$
 
-This is Pearson-style correlation and assumes corresponding samples. BER thresholds normalized values at 0.5 and measures the fraction of unequal bits. Both metrics require correctly aligned original and extracted watermark samples. If no original watermark is given, the current extraction code compares the recovered vector against itself and assigns BER zero; those values are not valid recovery measurements and must not be reported as experiment outcomes.
+Identical images have infinite PSNR. SSIM uses scikit-image with `data_range=255`. The embedding report compares the original cover with the actual saved 8-bit watermarked image. Attack PSNR/SSIM compare the watermarked image with its attacked version.
 
-### 5.4 Execution time
+### 5.2 Watermark recovery
 
-Embedding and extraction use `time.perf_counter()` and report elapsed milliseconds. Reproducible performance comparisons should record machine, Python and dependency versions, image dimensions, warm-up policy, and repetition statistics. No such benchmark campaign is included in this repository.
+The conventional normalized correlation is:
 
-## 6. Attack Operators
+$$
+\operatorname{NC}(x,y)=
+\frac{\sum_i x_i y_i}{\sqrt{\sum_i x_i^2}\sqrt{\sum_i y_i^2}}.
+$$
 
-The robustness module contains functions for:
+The inputs are corresponding normalized reference and extracted samples in \([0,1]\). A zero-vector comparison is undefined and rejected. BER thresholds both arrays at 0.5:
 
-| Attack | Current transformation |
-|---|---|
-| JPEG | Encode and decode through OpenCV at a selected quality setting |
-| Gaussian noise | Add random normal noise and clip to 8-bit range |
-| Salt-and-pepper | Replace selected pixels with 0 or 255; current coordinate seed is fixed |
-| Gaussian blur | Apply a Gaussian kernel, adjusting even kernel sizes upward to odd |
-| Resize | Resize by a scale factor and restore the original dimensions |
-| Brightness | Add a scalar pixel offset and clip |
-| Contrast | Multiply pixel values and clip |
-| Crop | Take a centered crop and resize it to the original dimensions |
+$$
+\operatorname{BER}(x,y)=
+\frac{1}{N}\sum_{i=1}^N
+\mathbf{1}\big[(x_i>0.5)\neq(y_i>0.5)\big].
+$$
 
-These functions describe operations implemented in code. The project has not established that the watermark survives them. Gaussian noise uses an unseeded global random draw, and crop-and-resize is not a synchronization/recovery method; it changes image content and alignment. Attack results should be collected only after the robustness endpoint serializes results correctly and the extraction comparison uses a valid reference watermark.
+The metrics reject unequal shapes, invalid ranges, empty arrays, and non-finite values; they do not truncate or align arrays silently. No-reference extraction is not allowed to substitute self-correlation or zero BER.
 
-## 7. Implementation and User Interface
+### 5.3 Attack experiments
 
-The web application uses Flask for routing, Pillow for grayscale file decoding/saving, NumPy and PyWavelets for numerical processing, OpenCV for attacks, and scikit-image for SSIM. Bootstrap is loaded from a CDN for layout and Chart.js is used by the results page. The pages include Home, Embed, Extract, Robustness, and Results.
+For each selected attack configuration, the program generates an attacked image, attempts the actual non-blind extraction against the original cover and reference watermark, measures PSNR/SSIM against the original watermarked image, and records extraction NC, BER, and elapsed time. A result row is marked `measured` when the comparison is defined. If extraction or comparison is impossible, the row is `extraction_failed` and NC/BER are null; no recovery score is fabricated.
 
-The embedding form connects to `/api/embed`; the extraction form connects to `/api/extract`. The current UI does not expose reference-watermark upload for extraction, despite the backend supporting an optional field. The robustness endpoint returns attack image arrays in its result objects, which Flask's standard JSON encoder cannot serialize as-is. Therefore the robustness UI and result charts must not be described as fully operational without a code change and successful endpoint test. The results page currently depends on session data and does not persist a full experiment report.
+Available operators are JPEG compression, seeded Gaussian noise, seeded salt-and-pepper noise, Gaussian blur, resize-and-restore, brightness shift, contrast scaling, and center crop followed by resize. Repeated runs of stochastic attacks should use controlled seeds. Extraction time is a single-run wall-clock measurement and is not a hardware-independent performance benchmark.
 
-## 8. Testing and Verification
+## 6. Measured Synthetic Demonstration
 
-### 8.1 Test suite
+### 6.1 Setup
 
-Tests use generated NumPy arrays rather than external image datasets. They cover DWT reconstruction shape, SVD reconstruction shape, embedding output shape/basic image-quality thresholds, extraction call behavior, metric computation, robustness result structure, and basic Flask responses.
+The measurements below were generated by running the implemented embedder, extractor, and attack runner once on **2026-10-11**:
 
-The latest recorded command was:
+- Cover: NumPy-generated random grayscale image, 128×128, seed `20261011`.
+- Watermark: 32×32 binary checkerboard, alternating 0 and 255.
+- Settings: Haar, level 1, LL, \(\alpha=0.05\), key `demo-key`.
+- Attacks: one value per listed configuration, with NumPy seed 0 for random noise.
+- Attack PSNR/SSIM are measured against the un-attacked watermarked image.
 
-```text
+The 128×128 cover gives a level-1 Haar LL band of 64×64 and capacity \(32\times32=1024\), exactly the checkerboard's 1024 samples.
+
+### 6.2 Clean embedding and extraction
+
+| Measurement | Observed value |
+|---|---:|
+| Cover vs watermarked PSNR | 45.2889 dB |
+| Cover vs watermarked SSIM | 0.999876 |
+| Clean extraction NC | 0.996311 |
+| Clean extraction BER | 0.000000 |
+| Embedding time | 8.54 ms |
+| Clean extraction time | 7.62 ms |
+
+Clean extraction here is a verified comparison against the actual checkerboard reference. These values apply only to this generated image, configuration, and single execution.
+
+### 6.3 Attack results
+
+| Attack and setting | Status | PSNR (dB) | SSIM | NC | BER | Extraction time (ms) |
+|---|---|---:|---:|---:|---:|---:|
+| JPEG quality 90 | measured | 36.3527 | 0.998572 | 0.978476 | 0.021484 | 7.25 |
+| JPEG quality 70 | measured | 26.9879 | 0.987698 | 0.868492 | 0.177734 | 7.48 |
+| JPEG quality 40 | measured | 20.9266 | 0.951230 | 0.694881 | 0.333984 | 7.30 |
+| Gaussian noise variance 25, seed 0 | measured | 34.2121 | 0.997701 | 0.792011 | 0.249023 | 8.88 |
+| Salt-and-pepper density 0.01, seed 0 | measured | 25.4151 | 0.983391 | 0.913131 | 0.068359 | 8.89 |
+| Gaussian blur kernel 5 | measured | 11.7680 | 0.243889 | 0.502145 | 0.446289 | 7.62 |
+| Resize scale 0.75, restore size | measured | 13.0322 | 0.490197 | 0.513704 | 0.439453 | 9.67 |
+| Brightness delta +20 | measured | 22.3693 | 0.989164 | 0.707107 | 0.500000 | 7.78 |
+| Contrast factor 1.2 | measured | 20.4487 | 0.976494 | 0.707107 | 0.500000 | 7.46 |
+| Center crop ratio 0.8, restore size | measured | 9.1693 | 0.005808 | 0.493239 | 0.497070 | 10.19 |
+
+These results show that quality scores alone do not imply watermark recovery: for example, brightness and contrast retain relatively high SSIM while yielding BER 0.5. The one-run synthetic table is illustrative, not a statistical study, and the `measured` label only means the extraction comparison was computable—not that the watermark passed a success threshold.
+
+**Environment:** Python 3.14.7, Flask 3.1.3, NumPy 2.5.3, OpenCV 5.0.0, PyWavelets 1.8.0, Pillow 12.3.0, SciPy 1.18.1, scikit-image 0.26.0. Timing varies with machine and system load.
+
+## 7. Testing and Verification
+
+The automated tests use generated arrays, not a real-world image dataset. They verify:
+
+- DWT reconstruction, including an odd image shape and multilevel decomposition;
+- block SVD output, embedding dimensions, and capacity rejection;
+- clean non-blind recovery with the true reference watermark;
+- that the deterministic lossy recovery case does not incorrectly return perfect NC or zero BER;
+- extraction rejection when required reference data is missing;
+- metric shape, range, and undefined-comparison validation;
+- actual attack-and-extract result structure and no fabricated scores on failure; and
+- basic Flask pages, missing-input responses, and application secret/debug settings.
+
+Run:
+
+```powershell
 python -m pytest -q
-8 passed in 4.13s
 ```
 
-This is evidence that the current assertions pass. It is not evidence that real watermark extraction works at a stated accuracy: the extraction test does not supply `original_watermark`, and in that case the code sets NC by comparing a vector with itself and BER to zero. The test should be strengthened before citing recovery accuracy in an academic evaluation.
+Latest observed result after the implementation changes: **19 passed**. This validates the present assertions, not broad generalization or resilience claims.
 
-### 8.2 Manual application check
+## 8. Security and Deployment Notes
 
-The development-server log supplied in the workspace shows successful page requests and successful `/api/embed` and output-download requests for at least one local image. The same log includes failed embedding requests that returned HTTP 400, with no request details to determine their causes. This supports basic application reachability and at least one successful embedding/download workflow, but it does not provide a reproducible dataset, settings, or quality measurements.
+The application uses `FLASK_SECRET_KEY` if configured and otherwise creates a random process-local secret; sessions will be lost after restart when using the fallback. Debug mode is off unless `FLASK_DEBUG` is explicitly enabled. API handlers provide user-facing validation messages and log unexpected processing errors rather than returning internal exception text.
 
-### 8.3 Results reporting
+This prototype is intended for local use. Before deployment, use a production WSGI server, stable managed secret configuration, storage retention controls, request throttling, and a deployment-specific security review. The optional key does not encrypt or authenticate image data.
 
-No quantitative robustness results are stated in this report. To produce valid result tables, run a corrected end-to-end pipeline using a reference watermark, document the exact images/settings, record raw metrics for each attack parameter, repeat random attacks with controlled seeds, and preserve the output files. Report failures as well as successes.
+## 9. Conclusion and Future Work
 
-## 9. Security, Reliability, and Limitations
+The updated project provides a dimension-preserving block-based DWT-SVD embedder, reference-required non-blind extraction, strict metric inputs, and real attack-and-extract experiments. It demonstrates high clean recovery for one generated example, while the included attack table shows degradation for several transformations. This is evidence only about the tested synthetic inputs and settings.
 
-1. **Non-blind extraction:** the original cover image and matching algorithm settings are required.
-2. **Reduced watermark representation:** arbitrary watermark images are flattened and sampled to a singular-value-length vector; the original 2D layout is not retained.
-3. **Single-level transform:** the decomposition-level form value is not used by `dwt2`/`idwt2`.
-4. **Metric correctness:** NC/BER are not meaningful without a correctly resized and aligned reference watermark; the no-reference extraction branch currently returns misleading self-correlation and zero BER.
-5. **Robustness integration:** attack image arrays are included in JSON output and are not JSON serializable by default. The endpoint needs to return metadata and/or saved image URLs instead.
-6. **Parameter validation:** numerical fields, attack names, and attack ranges need stricter validation.
-7. **Key security:** deterministic NumPy pseudorandom scrambling is not cryptographic. The Flask session key is hard-coded and must be replaced before deployment.
-8. **Development configuration:** Flask debug mode is enabled in the entry point. Debug mode must not be used on a public server.
-9. **Error handling:** API handlers return exception text to clients, which is convenient during development but can reveal implementation details.
-10. **No controlled benchmark:** no validated dataset, repeated trials, attack curves, or independently verified quality table is included.
-11. **Image dimensions and formats:** images are converted to grayscale and outputs are 8-bit; color channels and metadata are not retained.
-12. **Watermarking security:** there is no cryptographic authentication, tamper-proof proof-of-ownership protocol, or legal guarantee.
-
-## 10. Future Work
-
-- Define and implement a watermark representation that retains geometry, such as block-based SVD or a documented coefficient map.
-- Store watermark dimensions and data-type/configuration metadata needed for extraction.
-- Add genuinely reference-based NC and BER evaluation to the extraction UI and test pipeline.
-- Correct key permutation handling and use a well-reviewed cryptographic construction if confidentiality/authentication is a requirement.
-- Implement multi-level DWT consistently in embedding and extraction, or remove the unused level control.
-- Fix robustness output serialization, save attacked outputs safely, and return structured JSON metadata.
-- Add parameter validation, content-based file checks, random application secret configuration, generic API errors, and production deployment settings.
-- Add deterministic random seeds and repeated trials for stochastic attacks.
-- Test JPEG compression, Gaussian noise, blur, resize, brightness, contrast, and crop with recorded NC/BER curves and image-quality measures.
-- Compare against a simple baseline and report results with dataset provenance and limitations.
-- Improve the interface with image previews, progress/loading states, downloadable CSV reports, and visually inspectable extraction output.
-
-## 11. Conclusion
-
-This project provides a Flask-based educational prototype for exploring DWT and SVD operations in image watermarking. It demonstrates a transform-domain embedding path, a non-blind singular-value-difference extraction approach, image-quality metric utilities, and a set of common attack operators. The current implementation is not yet sufficient to support claims of reliable watermark recovery or attack resistance: the watermark is reduced to a vector, no-reference metrics are misleading, and robustness results require endpoint and evaluation fixes. These limitations are explicit targets for continued development. A defensible final experimental conclusion should be written only after reference-based recovery tests and reproducible attack measurements have been completed.
+Future work should evaluate a representative image corpus, repeat experiments across images and attack seeds, report distributions or confidence intervals, compare with appropriate baselines, add synchronization and error correction, and study capacity/visibility trade-offs. Robustness claims should be based on those controlled evaluations rather than one demonstration.
 
 ## References
 
@@ -293,17 +284,3 @@ This project provides a Flask-based educational prototype for exploring DWT and 
 5. PyWavelets documentation. *2D Discrete Wavelet Transform*. https://pywavelets.readthedocs.io/
 6. NumPy documentation. *Singular Value Decomposition*. https://numpy.org/doc/
 7. scikit-image documentation. *Structural Similarity Index*. https://scikit-image.org/docs/
-
-## Appendix A: Reproduction Commands
-
-Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m pytest -q
-python app.py
-```
-
-Open `http://127.0.0.1:5000/` after starting the local development server.

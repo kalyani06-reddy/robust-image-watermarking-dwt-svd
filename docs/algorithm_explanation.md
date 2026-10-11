@@ -1,67 +1,55 @@
 # DWT-SVD Watermarking Algorithm
 
-This note documents the algorithm currently present in the repository. It is a research prototype and should not be interpreted as evidence of measured robustness.
+This note describes the block-based, non-blind DWT-SVD method implemented in the application. Extraction requires both the unmodified cover and the same reference watermark used during embedding. Attack resistance is not implied by the algorithm or this description.
 
-## 1. DWT decomposition
+## 1. Image preparation and DWT
 
-The cover image is converted to grayscale and transformed with one call to `pywt.dwt2`. For a 2D image, the one-level transform provides four subbands:
+The application converts cover and watermark images to grayscale values in the 8-bit range. For a cover image \(I \in [0,255]^{H\times W}\), a \(J\)-level, symmetric-boundary 2D wavelet decomposition produces approximation coefficients \(A_J\) and detail bands at each level. The user-selected band is one of LL, LH, HL, or HH at level \(J\). Embedding and extraction must use the same wavelet, level, and band.
 
-- **LL:** approximation coefficients
-- **LH:** horizontal detail coefficients
-- **HL:** vertical detail coefficients
-- **HH:** diagonal detail coefficients
+Unlike the previous implementation, `level` controls a real multilevel decomposition. The inverse transform restores the original cover dimensions, including for odd-sized images.
 
-The default is Haar and LL. Embedding in a low-frequency band may improve persistence under some processing but can increase visible distortion. Detail bands may be less visible but can be more affected by filtering or compression. These are general trade-offs; this application does not guarantee either outcome. Although a decomposition-level form value exists, current code always applies one-level `dwt2`.
+## 2. Watermark capacity and embedding
 
-## 2. SVD and embedding
-
-For selected subband $A$, NumPy computes the reduced decomposition:
+Let the selected band be \(A\). It is partitioned from the top-left into non-overlapping \(2\times2\) blocks \(B_k\). For each block, compute its reduced SVD:
 
 $$
-A = U \operatorname{diag}(s) V^T
+B_k = U_k \operatorname{diag}(\sigma_{k,1}, \sigma_{k,2}) V_k^T,
+\qquad \sigma_{k,1} \geq \sigma_{k,2} \geq 0.
 $$
 
-The uploaded watermark is converted to grayscale, flattened, and sampled at evenly spaced indices to match the number of singular values. Its samples are normalized to $[0,1]$. With strength $\alpha$, the embedded singular values are:
+The watermark is kept as its original grayscale matrix \(W\), then normalized to \(w_i=W_i/255\) for embedding. In binary mode, pixels are first thresholded at the mean watermark intensity. Each normalized sample is added to the largest singular value of one block:
 
 $$
-s' = s + \alpha w
+\sigma'_{k,1} = \sigma_{k,1} + 192\alpha w_{\pi(k)}, \qquad
+\sigma'_{k,2} = \sigma_{k,2}.
 $$
 
-If a key is supplied, a deterministic pseudorandom permutation is applied to $w$ before embedding. The selected band is reconstructed using the original singular vectors:
+Here \(\alpha\) is the selected strength and \(\pi\) is the identity ordering unless an optional key is supplied. The key produces a repeatable SHA-256-seeded NumPy permutation; this is reproducible scrambling, not cryptographic protection. The modified block is reconstructed as \(B'_k=U_k\operatorname{diag}(\sigma'_{k,1},\sigma'_{k,2})V_k^T\). Unused blocks and any incomplete border are unchanged. The inverse DWT then produces the watermarked image.
+
+This representation retains every watermark pixel and its width and height; it does not silently resize or subsample. Its capacity is limited to
 
 $$
-A' = U \operatorname{diag}(s') V^T
+C = \left\lfloor\frac{r}{2}\right\rfloor
+    \left\lfloor\frac{c}{2}\right\rfloor
 $$
 
-The inverse DWT reconstructs the watermarked image. The watermark is represented as a vector here; its original two-dimensional layout is not retained by this method.
+samples for a selected band of size \(r\times c\). Embedding fails with a clear capacity error if the watermark has more than \(C\) pixels. Increasing capacity by using a deeper level reduces the available band size, so choose cover, watermark, level, band, and strength deliberately.
 
 ## 3. Non-blind extraction
 
-Extraction requires both the watermarked image and the original cover image. Both are transformed using the same wavelet and selected subband. If $s_w$ and $s$ are their singular-value vectors, the estimate is:
+Given a watermarked image \(I_w\), the original cover \(I\), and the reference watermark dimensions, the application applies the same DWT settings and extracts the first \(N=H_WW_W\) block coefficients:
 
 $$
-\hat{w} = \operatorname{clip}\left(\frac{s_w-s}{\alpha},0,1\right)
+\hat{w}_{\pi(k)} =
+\operatorname{clip}\left(
+\frac{\sigma^{(w)}_{k,1}-\sigma^{(c)}_{k,1}}{192\alpha}, 0, 1
+\right).
 $$
 
-The same key is required when scrambling was used. The current extractor returns the recovered vector; it does not restore the uploaded watermark's original dimensions. This is non-blind extraction and must not be described as blind extraction.
+When a key was used, the same deterministic permutation is inverted. The resulting \(N\) samples are reshaped to the reference watermark's \(H_W\times W_W\) dimensions and converted to an 8-bit image. The original cover, reference watermark, wavelet, level, band, strength, key, and watermark type must match embedding. The reference watermark supplies the dimensions and is also required for meaningful recovery comparison; it is not itself treated as an extracted result.
 
-## 4. Key handling
+## 4. Evaluation interpretation and limitations
 
-The code uses SHA-256 to derive an integer seed from the key and NumPy's `default_rng` to generate the repeatable permutation. This supports reproducibility, but NumPy's generator is not a cryptographic random-number generator. The permutation should not be described as encryption or cryptographic protection.
+The additive singular-value difference makes ideal coefficient recovery straightforward, but image reconstruction and 8-bit quantization introduce error. JPEG encoding, filtering, geometric changes, parameter mismatch, and strong attacks can further alter the block coefficients. No resilience is guaranteed. A larger strength generally improves the signal relative to quantization but also increases cover distortion.
 
-## 5. Metrics and attack operators
-
-The project includes PSNR and SSIM utilities for cover/watermarked image comparison and normalized correlation and BER utilities for aligned watermark samples. NC/BER are meaningful only when the original and extracted watermarks are dimensionally aligned and compared sample-by-sample. In the current no-reference extraction branch, NC is calculated by comparing the recovered vector with itself and BER is set to zero; these values do not measure recovery accuracy.
-
-Attack functions exist for JPEG compression, Gaussian noise, salt-and-pepper noise, Gaussian blur, resizing, brightness, contrast, and crop followed by resize. Their presence is not proof of robustness. In particular, the robustness API currently includes NumPy image arrays in JSON results, which requires correction before the full dashboard can return those results reliably.
-
-## 6. Limitations
-
-- The transform is single-level; the level option is not applied.
-- The watermark is flattened and sampled to a singular-value-length vector, losing spatial geometry.
-- Extraction is non-blind and requires the original cover and matching settings.
-- Meaningful recovery metrics require a reference watermark, which the extraction page currently does not upload.
-- No validated robustness benchmark or attack-success claim is provided.
-- Key-based scrambling is deterministic obfuscation, not cryptographic security.
-
-For the full architecture, setup, test evidence, security notes, and future work, see [academic_project_report.md](academic_project_report.md).
+The method is non-blind and requires the exact original cover. Its simple row-major block layout has no synchronization or error-correction mechanism, so crop/resize and geometric changes can misalign extraction. A key only permutes samples and is not encryption. The block size is fixed at \(2\times2\); only its largest singular value is modified. Output images are grayscale 8-bit images. Reliability and attack performance must be measured against the actual reference watermark for each experiment.

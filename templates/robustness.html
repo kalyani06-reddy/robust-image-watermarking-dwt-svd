@@ -39,7 +39,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Original watermark</label>
-                            <input class="form-control" type="file" name="watermark" accept=".png,.jpg,.jpeg,.bmp">
+                            <input class="form-control" type="file" name="watermark" accept=".png,.jpg,.jpeg,.bmp" required>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Wavelet</label>
@@ -59,7 +59,75 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Strength</label>
-                            <input class="form-control" type="number" name="alpha" step="0.01" value="0.05">
+                            <input class="form-control" type="number" name="alpha" step="0.01" min="0.01" max="0.3" value="0.05">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Watermark type</label>
+                            <select class="form-select" name="watermark_type">
+                                <option value="grayscale" selected>Grayscale</option>
+                                <option value="binary">Binary</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <h5 class="mt-2">Attacks and strengths</h5>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="jpeg" checked>
+                                        <label class="form-check-label">JPEG qualities</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="jpeg" value="90,70,40" aria-label="JPEG quality levels">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="gaussian_noise" checked>
+                                        <label class="form-check-label">Gaussian noise variance</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="gaussian_noise" type="number" min="0" max="10000" step="1" value="25">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="salt_pepper" checked>
+                                        <label class="form-check-label">Salt-and-pepper density</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="salt_pepper" type="number" min="0" max="1" step="0.01" value="0.01">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="gaussian_blur" checked>
+                                        <label class="form-check-label">Gaussian blur kernel size</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="gaussian_blur" type="number" min="1" max="99" step="2" value="5">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="resize" checked>
+                                        <label class="form-check-label">Resize scale</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="resize" type="number" min="0.01" max="4" step="0.05" value="0.75">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="brightness" checked>
+                                        <label class="form-check-label">Brightness delta</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="brightness" type="number" min="-255" max="255" step="1" value="20">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="contrast" checked>
+                                        <label class="form-check-label">Contrast factor</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="contrast" type="number" min="0" max="4" step="0.1" value="1.2">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input attack-choice" type="checkbox" value="crop" checked>
+                                        <label class="form-check-label">Center crop ratio</label>
+                                    </div>
+                                    <input class="form-control attack-strength" data-attack="crop" type="number" min="0.01" max="1" step="0.05" value="0.8">
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-12">
                             <label class="form-label">Optional key</label>

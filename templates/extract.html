@@ -37,6 +37,10 @@
                             <label class="form-label">Original cover image</label>
                             <input class="form-control" type="file" name="original" accept=".png,.jpg,.jpeg,.bmp" required>
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Reference watermark (same image used for embedding)</label>
+                            <input class="form-control" type="file" name="reference_watermark" accept=".png,.jpg,.jpeg,.bmp" required>
+                        </div>
                         <div class="col-md-3">
                             <label class="form-label">Wavelet</label>
                             <select class="form-select" name="wavelet">
@@ -59,9 +63,16 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Strength</label>
-                            <input class="form-control" type="number" step="0.01" name="alpha" value="0.05">
+                            <input class="form-control" type="number" step="0.01" min="0.01" max="0.3" name="alpha" value="0.05">
                         </div>
-                        <div class="col-md-12">
+                        <div class="col-md-6">
+                            <label class="form-label">Watermark type</label>
+                            <select class="form-select" name="watermark_type">
+                                <option value="grayscale" selected>Grayscale</option>
+                                <option value="binary">Binary</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label">Secret key</label>
                             <input class="form-control" type="text" name="key" placeholder="same key as embedding step">
                         </div>

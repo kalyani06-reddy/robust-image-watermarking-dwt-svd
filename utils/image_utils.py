@@ -1,4 +1,5 @@
 import os
+from io import BytesIO
 from pathlib import Path
 
 import cv2
@@ -9,7 +10,11 @@ from config import ALLOWED_EXTENSIONS
 
 
 def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    return (
+        isinstance(filename, str)
+        and "." in filename
+        and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    )
 
 
 def ensure_uint8(image_array):
@@ -24,8 +29,19 @@ def read_image_file(file_storage):
     filename = file_storage.filename
     if not allowed_file(filename):
         raise ValueError("Unsupported image format.")
-    img = Image.open(file_storage)
-    img = img.convert("L")
+    try:
+        content = file_storage.read()
+        img = Image.open(BytesIO(content))
+        if img.width * img.height > 16_000_000:
+            raise ValueError("Image dimensions exceed the 16-megapixel processing limit.")
+        expected_format = Path(filename).suffix.lower().lstrip(".")
+        accepted_formats = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "bmp": "BMP"}
+        if img.format != accepted_formats[expected_format]:
+            raise ValueError("Image contents do not match the file extension.")
+        img.load()
+        img = img.convert("L")
+    except (OSError, Image.DecompressionBombError) as exc:
+        raise ValueError("Uploaded file is not a valid supported image.") from exc
     return np.asarray(img, dtype=np.uint8)
 
 
