@@ -35,9 +35,13 @@ def normalized_correlation(image_a, image_b):
     a, b = _validated_pair(image_a, image_b, "Normalized-correlation", (0.0, 1.0))
     a = a.reshape(-1)
     b = b.reshape(-1)
-    denominator = np.linalg.norm(a) * np.linalg.norm(b)
-    if np.isclose(denominator, 0.0):
-        raise ValueError("Normalized correlation is undefined for a zero watermark.")
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a == 0.0 and norm_b == 0.0:
+        return 1.0
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    denominator = norm_a * norm_b
     return float(np.clip(np.dot(a, b) / denominator, -1.0, 1.0))
 
 

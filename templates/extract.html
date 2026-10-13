@@ -15,7 +15,7 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="/embed">Embed</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/extract">Extract</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/extract" aria-current="page">Extract</a></li>
                     <li class="nav-item"><a class="nav-link" href="/robustness">Robustness</a></li>
                     <li class="nav-item"><a class="nav-link" href="/results">Results</a></li>
                 </ul>
@@ -23,61 +23,93 @@
         </div>
     </nav>
 
-    <main class="container py-4">
-        <div class="card shadow-sm border-0">
+    <main class="container py-4 py-lg-5">
+        <header class="page-heading page-intro extract-heading">
+            <div>
+                <span class="eyebrow">Step 02 · Recover and compare</span>
+                <h1 class="h2 mb-0 mt-2">Extract watermark</h1>
+                <p>Recover the embedded signal and compare it with the original reference watermark.</p>
+            </div>
+            <span class="page-chip"><span class="chip-dot"></span> Non-blind extraction</span>
+        </header>
+        <div class="card form-panel extract-panel shadow-sm border-0">
             <div class="card-body p-4">
-                <h2 class="mb-4">Extract Watermark</h2>
+                <div class="form-section-heading">
+                    <span class="section-index">01</span>
+                    <div>
+                        <h2 class="h5 mb-1">Provide the source images</h2>
+                        <p class="mb-0">Extraction needs the watermarked image, original cover, and reference.</p>
+                    </div>
+                </div>
+                <div class="alert alert-info" role="note">
+                    Use the exact watermarked image, original cover, reference watermark, and embedding settings. If capacity fitting was needed during embedding, the reference is fitted the same way for metrics; the recovered preview is enlarged to the reference dimensions.
+                </div>
                 <form id="extract-form" enctype="multipart/form-data">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-6 upload-tile">
                             <label class="form-label">Watermarked image</label>
-                            <input class="form-control" type="file" name="watermarked" accept=".png,.jpg,.jpeg,.bmp" required>
+                            <input class="form-control" type="file" name="watermarked" accept=".png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff,.gif" required>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 upload-tile">
                             <label class="form-label">Original cover image</label>
-                            <input class="form-control" type="file" name="original" accept=".png,.jpg,.jpeg,.bmp" required>
+                            <input class="form-control" type="file" name="original" accept=".png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff,.gif" required>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 upload-tile">
                             <label class="form-label">Reference watermark (same image used for embedding)</label>
-                            <input class="form-control" type="file" name="reference_watermark" accept=".png,.jpg,.jpeg,.bmp" required>
+                            <input class="form-control" type="file" name="reference_watermark" accept=".png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff,.gif" required>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-12 form-section-divider"></div>
+                        <div class="col-12">
+                            <div class="form-section-heading compact">
+                                <span class="section-index">02</span>
+                                <div>
+                                    <h2 class="h5 mb-1">Match embedding settings</h2>
+                                    <p class="mb-0">Use the same wavelet, level, subband, strength, type, and key.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Wavelet</label>
                             <select class="form-select" name="wavelet">
                                 <option value="haar" selected>Haar</option>
                                 <option value="db2">db2</option>
+                                <option value="sym2">sym2</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Level</label>
                             <input class="form-control" type="number" name="level" value="1" min="1" max="3">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Subband</label>
                             <select class="form-select" name="subband">
-                                <option value="LL" selected>LL</option>
+                                <option value="ALL" selected>All DWT subbands (maximum capacity)</option>
+                                <option value="LL">LL</option>
                                 <option value="LH">LH</option>
                                 <option value="HL">HL</option>
                                 <option value="HH">HH</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Strength</label>
                             <input class="form-control" type="number" step="0.01" min="0.01" max="0.3" name="alpha" value="0.05">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 setting-tile">
                             <label class="form-label">Watermark type</label>
                             <select class="form-select" name="watermark_type">
                                 <option value="grayscale" selected>Grayscale</option>
                                 <option value="binary">Binary</option>
                             </select>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 setting-tile">
                             <label class="form-label">Secret key</label>
                             <input class="form-control" type="text" name="key" placeholder="same key as embedding step">
                         </div>
                     </div>
-                    <button class="btn btn-primary mt-4" type="submit">Extract Watermark</button>
+                    <div class="form-submit-row">
+                        <span class="submit-note">Recovery quality is measured against your reference.</span>
+                        <button class="btn btn-primary btn-lg" type="submit">Extract watermark <span aria-hidden="true">→</span></button>
+                    </div>
                 </form>
                 <div id="extract-status" class="mt-4"></div>
             </div>

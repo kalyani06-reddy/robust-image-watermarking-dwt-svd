@@ -152,7 +152,7 @@ def run_robustness_experiment(watermarked_image, original_cover, watermark, atta
                 original_cover,
                 wavelet=kwargs.get("wavelet", "haar"),
                 level=kwargs.get("level", 1),
-                subband=kwargs.get("subband", "LL"),
+                subband=kwargs.get("subband", "ALL"),
                 alpha=kwargs.get("alpha", 0.05),
                 key=kwargs.get("key", ""),
                 original_watermark=watermark,

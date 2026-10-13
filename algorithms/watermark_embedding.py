@@ -3,7 +3,12 @@ import time
 import numpy as np
 
 from algorithms.dwt_transform import dwt_decompose, reconstruct_from_subbands
-from algorithms.svd_embedding import svd_embed_subband
+from algorithms.svd_embedding import (
+    prepare_watermark_matrix,
+    svd_embed_subband,
+    svd_embed_subbands,
+)
+from algorithms.watermark_payload import fit_watermark_to_subbands
 from utils.image_utils import ensure_uint8
 from utils.metrics import psnr, ssim_index
 
@@ -30,22 +35,39 @@ def embed_watermark(
     if watermark.ndim == 3:
         watermark = np.mean(watermark, axis=2)
 
-    if subband not in ("LL", "LH", "HL", "HH"):
+    if subband not in ("LL", "LH", "HL", "HH", "ALL"):
         raise ValueError(f"Unsupported subband: {subband}")
     if isinstance(level, bool) or not isinstance(level, (int, np.integer)):
         raise ValueError("Decomposition level must be a positive integer.")
 
     start = time.perf_counter()
     subbands = dwt_decompose(cover, wavelet, level)
-    selected = subbands[subband]
-    watermarked_subband, _, _, _ = svd_embed_subband(
-        selected,
-        watermark,
-        alpha=alpha,
-        key=key,
-        watermark_type=watermark_type,
+    watermark, payload_info = fit_watermark_to_subbands(
+        watermark, subbands, subband, watermark_type
     )
-    subbands[subband] = watermarked_subband
+    subband = payload_info["subband"]
+    watermark_values = prepare_watermark_matrix(
+        watermark, watermark_type=watermark_type
+    )
+    if subband == "ALL":
+        modified_bands, _ = svd_embed_subbands(
+            subbands,
+            watermark,
+            alpha=alpha,
+            key=key,
+            watermark_type=watermark_type,
+        )
+        subbands.update(modified_bands)
+    else:
+        selected = subbands[subband]
+        watermarked_subband, _, _, _ = svd_embed_subband(
+            selected,
+            watermark,
+            alpha=alpha,
+            key=key,
+            watermark_type=watermark_type,
+        )
+        subbands[subband] = watermarked_subband
     watermarked = reconstruct_from_subbands(subbands, wavelet)
     watermarked = watermarked[:cover.shape[0], :cover.shape[1]]
     watermarked_uint8 = ensure_uint8(watermarked)
@@ -69,6 +91,10 @@ def embed_watermark(
             "alpha": float(alpha),
             "key": bool(key),
             "watermark_shape": list(watermark.shape),
+            "source_watermark_shape": payload_info["source_shape"],
+            "embedded_watermark_shape": payload_info["embedded_shape"],
+            "watermark_resized": payload_info["resized"],
+            "watermark_capacity": payload_info["capacity"],
             "watermark_type": watermark_type,
         },
     }

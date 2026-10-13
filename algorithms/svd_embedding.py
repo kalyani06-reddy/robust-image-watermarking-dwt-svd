@@ -70,6 +70,23 @@ def _iter_blocks(subband):
             index += 1
 
 
+def _embed_samples(subband, samples, alpha):
+    watermarked = np.asarray(subband, dtype=np.float64).copy()
+    singular_values_used = np.empty(len(samples), dtype=np.float64)
+    increment = float(alpha) * SINGULAR_VALUE_SCALE
+    for slot, top, left in _iter_blocks(watermarked):
+        if slot >= len(samples):
+            break
+        block = watermarked[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE]
+        u, singular_values, vt = np.linalg.svd(block, full_matrices=False)
+        singular_values_used[slot] = singular_values[0]
+        singular_values[0] += increment * samples[slot]
+        watermarked[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE] = (
+            u @ np.diag(singular_values) @ vt
+        )
+    return watermarked, singular_values_used
+
+
 def svd_embed_subband(subband, watermark, alpha=0.05, key="", watermark_type="grayscale"):
     band = np.asarray(subband, dtype=np.float64)
     if band.ndim != 2 or band.size == 0 or not np.all(np.isfinite(band)):
@@ -79,20 +96,57 @@ def svd_embed_subband(subband, watermark, alpha=0.05, key="", watermark_type="gr
     capacity = _block_capacity(band)
     watermark_values = prepare_watermark_matrix(watermark, capacity, watermark_type)
     scrambled, inverse = scramble_matrix(watermark_values, key)
-    watermarked = band.copy()
-    original_singular_values = np.empty(watermark_values.size, dtype=np.float64)
-    increment = float(alpha) * SINGULAR_VALUE_SCALE
-    for slot, top, left in _iter_blocks(watermarked):
-        if slot >= watermark_values.size:
-            break
-        block = watermarked[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE]
-        u, singular_values, vt = np.linalg.svd(block, full_matrices=False)
-        original_singular_values[slot] = singular_values[0]
-        singular_values[0] += increment * scrambled[slot]
-        watermarked[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE] = (
-            u @ np.diag(singular_values) @ vt
-        )
+    watermarked, original_singular_values = _embed_samples(band, scrambled, alpha)
     return watermarked, original_singular_values, scrambled, inverse
+
+
+def svd_embed_subbands(
+    subbands,
+    watermark,
+    alpha=0.05,
+    key="",
+    watermark_type="grayscale",
+):
+    band_names = ("LL", "LH", "HL", "HH")
+    bands = {name: np.asarray(subbands[name], dtype=np.float64) for name in band_names}
+    if any(
+        band.ndim != 2 or band.size == 0 or not np.all(np.isfinite(band))
+        for band in bands.values()
+    ):
+        raise ValueError("All selected DWT subbands must be non-empty finite 2D arrays.")
+    if not np.isfinite(alpha) or alpha <= 0 or alpha > 0.3:
+        raise ValueError("Embedding strength must be greater than 0 and at most 0.3.")
+    capacities = {name: _block_capacity(band) for name, band in bands.items()}
+    total_capacity = sum(capacities.values())
+    watermark_values = prepare_watermark_matrix(
+        watermark, total_capacity, watermark_type
+    )
+    scrambled, inverse = scramble_matrix(watermark_values, key)
+
+    modified_bands = {}
+    offset = 0
+    for name in band_names:
+        count = min(capacities[name], len(scrambled) - offset)
+        modified_bands[name], _ = _embed_samples(
+            bands[name], scrambled[offset:offset + count], alpha
+        )
+        offset += count
+    return modified_bands, inverse
+
+
+def _extract_samples(watermarked, original, count, alpha):
+    recovered = np.empty(count, dtype=np.float64)
+    for slot, top, left in _iter_blocks(original):
+        if slot >= count:
+            break
+        original_block = original[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE]
+        watermarked_block = watermarked[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE]
+        original_singular = np.linalg.svd(original_block, compute_uv=False)[0]
+        watermarked_singular = np.linalg.svd(watermarked_block, compute_uv=False)[0]
+        recovered[slot] = (watermarked_singular - original_singular) / (
+            float(alpha) * SINGULAR_VALUE_SCALE
+        )
+    return np.clip(recovered, 0.0, 1.0)
 
 
 def svd_extract_subband(
@@ -122,18 +176,67 @@ def svd_extract_subband(
             f"subband capacity of {capacity}."
         )
 
-    recovered = np.empty(watermark_size, dtype=np.float64)
-    for slot, top, left in _iter_blocks(original):
-        if slot >= watermark_size:
-            break
-        original_block = original[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE]
-        watermarked_block = watermarked[top:top + BLOCK_SIZE, left:left + BLOCK_SIZE]
-        original_singular = np.linalg.svd(original_block, compute_uv=False)[0]
-        watermarked_singular = np.linalg.svd(watermarked_block, compute_uv=False)[0]
-        recovered[slot] = (watermarked_singular - original_singular) / (
-            float(alpha) * SINGULAR_VALUE_SCALE
-        )
-    recovered = np.clip(recovered, 0.0, 1.0)
+    recovered = _extract_samples(watermarked, original, watermark_size, alpha)
     if key:
         recovered = unscramble_matrix(recovered, key, inverse=inverse)
+    return recovered
+
+
+def svd_extract_subbands(
+    watermarked_subbands,
+    original_subbands,
+    alpha=0.05,
+    key="",
+    watermark_size=None,
+):
+    band_names = ("LL", "LH", "HL", "HH")
+    watermarked = {
+        name: np.asarray(watermarked_subbands[name], dtype=np.float64)
+        for name in band_names
+    }
+    original = {
+        name: np.asarray(original_subbands[name], dtype=np.float64)
+        for name in band_names
+    }
+    for name in band_names:
+        if (
+            watermarked[name].ndim != 2
+            or original[name].ndim != 2
+            or watermarked[name].shape != original[name].shape
+        ):
+            raise ValueError(
+                f"Watermarked and original {name} subbands must have identical 2D dimensions."
+            )
+        if not np.all(np.isfinite(watermarked[name])) or not np.all(np.isfinite(original[name])):
+            raise ValueError("DWT subbands must contain only finite values.")
+    if not np.isfinite(alpha) or alpha <= 0 or alpha > 0.3:
+        raise ValueError("Embedding strength must be greater than 0 and at most 0.3.")
+    if watermark_size is None:
+        raise ValueError("Reference watermark dimensions are required for extraction.")
+    if isinstance(watermark_size, bool) or not isinstance(watermark_size, (int, np.integer)):
+        raise ValueError("Watermark size must be a positive integer.")
+    capacities = {
+        name: _block_capacity(original[name])
+        for name in band_names
+    }
+    total_capacity = sum(capacities.values())
+    if watermark_size < 1 or watermark_size > total_capacity:
+        raise ValueError(
+            f"Requested watermark size {watermark_size} exceeds the combined "
+            f"DWT subband capacity of {total_capacity}."
+        )
+
+    recovered_parts = []
+    remaining = watermark_size
+    for name in band_names:
+        count = min(capacities[name], remaining)
+        recovered_parts.append(
+            _extract_samples(watermarked[name], original[name], count, alpha)
+        )
+        remaining -= count
+        if remaining == 0:
+            break
+    recovered = np.concatenate(recovered_parts)
+    if key:
+        recovered = unscramble_matrix(recovered, key)
     return recovered

@@ -14,7 +14,7 @@
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/embed">Embed</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/embed" aria-current="page">Embed</a></li>
                     <li class="nav-item"><a class="nav-link" href="/extract">Extract</a></li>
                     <li class="nav-item"><a class="nav-link" href="/robustness">Robustness</a></li>
                     <li class="nav-item"><a class="nav-link" href="/results">Results</a></li>
@@ -23,21 +23,48 @@
         </div>
     </nav>
 
-    <main class="container py-4">
-        <div class="card shadow-sm border-0">
+    <main class="container py-4 py-lg-5">
+        <header class="page-heading page-intro embed-heading">
+            <div>
+                <span class="eyebrow">Step 01 · Create a watermark</span>
+                <h1 class="h2 mb-0 mt-2">Embed watermark</h1>
+                <p>Protect a cover image with a watermark using configurable DWT–SVD settings.</p>
+            </div>
+            <span class="page-chip"><span class="chip-dot"></span> Image processing</span>
+        </header>
+        <div class="card form-panel embed-panel shadow-sm border-0">
             <div class="card-body p-4">
-                <h2 class="mb-4">Embed Watermark</h2>
+                <div class="form-section-heading">
+                    <span class="section-index">01</span>
+                    <div>
+                        <h2 class="h5 mb-1">Choose your images</h2>
+                        <p class="mb-0">Select a cover image and the watermark to embed.</p>
+                    </div>
+                </div>
+                <div class="alert alert-info" role="note">
+                    Upload a PNG, JPG, JPEG, BMP, WEBP, TIFF, or GIF image (the first frame is used for animations). If the watermark is larger than the cover can represent, the app automatically uses all DWT subbands and reduces the embedded resolution to fit. The recovered preview is shown at the original dimensions, but details removed during reduction cannot be restored.
+                </div>
                 <form id="embed-form" enctype="multipart/form-data">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-6 upload-tile">
                             <label class="form-label">Cover image</label>
-                            <input class="form-control" type="file" name="cover" accept=".png,.jpg,.jpeg,.bmp" required>
+                            <input class="form-control" type="file" name="cover" accept=".png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff,.gif" required>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 upload-tile">
                             <label class="form-label">Watermark image</label>
-                            <input class="form-control" type="file" name="watermark" accept=".png,.jpg,.jpeg,.bmp" required>
+                            <input class="form-control" type="file" name="watermark" accept=".png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff,.gif" required>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-12 form-section-divider"></div>
+                        <div class="col-12">
+                            <div class="form-section-heading compact">
+                                <span class="section-index">02</span>
+                                <div>
+                                    <h2 class="h5 mb-1">Embedding settings</h2>
+                                    <p class="mb-0">These settings must match when you extract the watermark.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Wavelet</label>
                             <select class="form-select" name="wavelet">
                                 <option value="haar" selected>Haar</option>
@@ -45,29 +72,30 @@
                                 <option value="sym2">sym2</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Decomposition level</label>
                             <input class="form-control" type="number" name="level" value="1" min="1" max="3">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Subband</label>
                             <select class="form-select" name="subband">
-                                <option value="LL" selected>LL</option>
+                                <option value="ALL" selected>All DWT subbands (maximum capacity)</option>
+                                <option value="LL">LL</option>
                                 <option value="LH">LH</option>
                                 <option value="HL">HL</option>
                                 <option value="HH">HH</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 setting-tile">
                             <label class="form-label">Watermark strength</label>
-                            <input class="form-range" type="range" name="alpha" min="0.01" max="0.3" step="0.01" value="0.05">
-                            <div class="small text-muted">0.05</div>
+                            <input class="form-range" id="watermark-strength" type="range" name="alpha" min="0.01" max="0.3" step="0.01" value="0.05">
+                            <output class="strength-value" for="watermark-strength">0.05</output>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 setting-tile">
                             <label class="form-label">Optional secret key</label>
                             <input class="form-control" type="text" name="key" placeholder="optional seed">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6 setting-tile">
                             <label class="form-label">Watermark type</label>
                             <select class="form-select" name="watermark_type">
                                 <option value="grayscale" selected>Grayscale</option>
@@ -75,7 +103,10 @@
                             </select>
                         </div>
                     </div>
-                    <button class="btn btn-primary mt-4" type="submit">Embed Watermark</button>
+                    <div class="form-submit-row">
+                        <span class="submit-note">Your uploaded originals are not overwritten.</span>
+                        <button class="btn btn-primary btn-lg" type="submit">Embed watermark <span aria-hidden="true">→</span></button>
+                    </div>
                 </form>
                 <div id="embed-status" class="mt-4"></div>
             </div>

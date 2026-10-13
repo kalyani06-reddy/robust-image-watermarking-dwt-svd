@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from algorithms.dwt_transform import dwt_decompose, reconstruct_from_subbands
 from algorithms.watermark_embedding import embed_watermark
@@ -29,8 +28,10 @@ def test_multilevel_dwt_reconstruction_preserves_odd_image_shape():
     assert np.allclose(reconstructed, image, atol=1e-10)
 
 
-def test_embedding_rejects_watermark_larger_than_block_capacity():
+def test_embedding_resizes_watermark_larger_than_block_capacity():
     cover = np.zeros((32, 32), dtype=np.uint8)
     watermark = np.zeros((300, 300), dtype=np.uint8)
-    with pytest.raises(ValueError, match="can hold at most"):
-        embed_watermark(cover, watermark, level=1, subband='LL')
+    result = embed_watermark(cover, watermark, level=1, subband='ALL')
+    assert result["settings"]["watermark_resized"] is True
+    assert result["settings"]["source_watermark_shape"] == [300, 300]
+    assert np.prod(result["settings"]["embedded_watermark_shape"]) <= result["settings"]["watermark_capacity"]

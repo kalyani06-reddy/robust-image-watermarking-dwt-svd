@@ -34,9 +34,19 @@ def read_image_file(file_storage):
         img = Image.open(BytesIO(content))
         if img.width * img.height > 16_000_000:
             raise ValueError("Image dimensions exceed the 16-megapixel processing limit.")
-        expected_format = Path(filename).suffix.lower().lstrip(".")
-        accepted_formats = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "bmp": "BMP"}
-        if img.format != accepted_formats[expected_format]:
+        extension = Path(filename).suffix.lower().lstrip(".")
+        accepted_formats = {
+            "jpg": "JPEG",
+            "jpeg": "JPEG",
+            "png": "PNG",
+            "bmp": "BMP",
+            "webp": "WEBP",
+            "tif": "TIFF",
+            "tiff": "TIFF",
+            "gif": "GIF",
+        }
+        expected_format = accepted_formats[extension]
+        if img.format != expected_format:
             raise ValueError("Image contents do not match the file extension.")
         img.load()
         img = img.convert("L")

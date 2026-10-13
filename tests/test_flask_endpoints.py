@@ -22,6 +22,35 @@ def test_home_endpoint_returns_html():
     assert b'Robust Image Watermarking' in response.data
 
 
+def test_results_dashboard_contains_status_and_recovery_charts():
+    client = app.test_client()
+    with client.session_transaction() as browser_session:
+        browser_session["latest_results"] = {
+            "attacks": [
+                {
+                    "attack": "jpeg",
+                    "attack_params": {"name": "jpeg", "quality": 80},
+                    "status": "measured",
+                    "nc": 0.9,
+                    "ber": 0.1,
+                },
+                {
+                    "attack": "crop",
+                    "attack_params": {"name": "crop", "crop_ratio": 0.5},
+                    "status": "extraction_failed",
+                    "nc": None,
+                    "ber": None,
+                },
+            ]
+        }
+
+    response = client.get("/results")
+    assert response.status_code == 200
+    assert b'id="statusChart"' in response.data
+    assert b'id="recoveryChart"' in response.data
+    assert b'"status": "measured"' in response.data
+
+
 def test_embed_endpoint_requires_files():
     client = app.test_client()
     response = client.post('/api/embed')

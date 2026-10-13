@@ -15,7 +15,7 @@
 
 This project implements a grayscale image watermarking prototype using a multilevel Discrete Wavelet Transform (DWT) and Singular Value Decomposition (SVD). Each normalized watermark pixel modifies the largest singular value of a separate 2×2 block in a selected wavelet subband. The Flask application supports embedding, non-blind reference-based extraction, common image attacks, image-quality and watermark metrics, previews, charts, and CSV export.
 
-Unlike a vector-sampling scheme, the current method retains the watermark's dimensions and rejects payloads that exceed band capacity. Extraction requires the exact original cover and reference watermark, together with matching algorithm settings. The tests verify clean recovery on generated data, but the block grid has no synchronization or error correction. Example attack measurements show varying recovery and severe degradation under some transformations. Those results illustrate this configuration only; they do not establish general attack resistance.
+The current method retains the source watermark dimensions as metadata and automatically fits oversized payloads to available DWT capacity. If fitting is needed, watermark detail is lost and cannot be restored by extraction. Extraction requires the exact original cover and reference watermark, together with matching algorithm settings. The tests verify clean recovery on generated data, but the block grid has no synchronization or error correction. Example attack measurements show varying recovery and severe degradation under some transformations. Those results illustrate this configuration only; they do not establish general attack resistance.
 
 **Keywords:** digital watermarking, DWT, SVD, non-blind extraction, PSNR, SSIM, normalized correlation, BER
 
@@ -29,7 +29,7 @@ The application is an educational experiment tool. It is not a production owners
 
 The aim is to implement and evaluate a DWT-SVD grayscale watermarking prototype. Objectives are to:
 
-- embed watermark samples while preserving the original watermark dimensions;
+- embed watermark samples across the available bands, fitting oversized payloads to capacity;
 - recover the watermark using the original cover and matching configuration;
 - calculate image quality and reference-based watermark metrics;
 - execute selected image attacks and record actual extraction results;
@@ -38,7 +38,7 @@ The aim is to implement and evaluate a DWT-SVD grayscale watermarking prototype.
 
 ### 1.2 Scope
 
-Inputs are grayscale-converted PNG, JPEG, or BMP images. The request limit is 16 MiB and decoded image limit is 16 megapixels. Extraction is non-blind. It requires the exact original cover, reference watermark, wavelet, decomposition level, subband, embedding strength, watermark type, and optional key used during embedding.
+Inputs are grayscale-converted PNG, JPEG, BMP, WEBP, TIFF, or GIF images; animated GIF input uses its first frame. The request limit is 16 MiB and decoded image limit is 16 megapixels. An oversized watermark is automatically reduced to the selected cover's finite coefficient capacity. Extraction is non-blind. It requires the exact original cover, reference watermark, wavelet, decomposition level, subband, embedding strength, watermark type, and optional key used during embedding.
 
 ## 2. Background
 
@@ -98,14 +98,14 @@ Let cover \(I\in[0,255]^{H\times W}\) and watermark \(W\in[0,255]^{H_W\times W_W
 
 ### 4.2 DWT band and capacity
 
-The cover is decomposed to the selected level \(J\), giving selected band \(A\in\mathbb{R}^{r\times c}\). Starting at the top-left, the implementation partitions \(A\) into non-overlapping 2×2 blocks. The number of usable blocks, and therefore the maximum number of watermark samples, is:
+The cover is decomposed to the selected level \(J\), giving one selected band \(A\in\mathbb{R}^{r\times c}\) or, when **ALL** is selected, LL, LH, HL, and HH at that level. Each chosen band is partitioned from the top-left into non-overlapping 2×2 blocks. For one band, the number of usable blocks is:
 
 $$
 C=\left\lfloor\frac{r}{2}\right\rfloor
   \left\lfloor\frac{c}{2}\right\rfloor.
 $$
 
-If \(H_WW_W>C\), embedding rejects the request with a capacity error. Incomplete rows or columns at the band boundary remain unchanged.
+For **ALL**, the capacity is the sum of the block counts across the four bands. If a single-band selection is too small, the application automatically switches to **ALL**. If the source watermark still exceeds the combined capacity, it is downscaled with area interpolation to fit. Original dimensions are retained as metadata, but details discarded during downscaling are irrecoverable. Incomplete rows or columns at each band boundary remain unchanged.
 
 ### 4.3 Block-SVD embedding
 
@@ -137,11 +137,11 @@ B'_i=U_i
 \end{bmatrix}V_i^T.
 $$
 
-If there is no key, \(\pi\) is the identity. If a key is given, it seeds a deterministic NumPy permutation using a SHA-256 digest. The selected band is reconstructed with the modified blocks, then an inverse DWT reconstructs and clips the 8-bit watermarked output.
+If there is no key, \(\pi\) is the identity. If a key is given, it seeds a deterministic NumPy permutation using a SHA-256 digest. In **ALL** mode, the globally scrambled watermark vector is split across LL, LH, HL, and HH in that order. The selected bands are reconstructed with the modified blocks, then an inverse DWT reconstructs and clips the 8-bit watermarked output.
 
 ### 4.4 Non-blind extraction
 
-Extraction decomposes the watermarked image and original cover with matching settings and follows the same block ordering. With \(N=H_WW_W\):
+Extraction decomposes the watermarked image and original cover with matching settings and follows the same band and block ordering. It applies the same capacity fit to the reference watermark. In **ALL** mode, extracted samples from LL, LH, HL, and HH are concatenated in that order before reversing the global key permutation. With \(N\) equal to the fitted sample count:
 
 $$
 \hat w_{\pi(i)}=
@@ -151,7 +151,7 @@ $$
 \right), \qquad 0\leq i<N.
 $$
 
-The permutation is inverted when a key was supplied, and the resulting vector is reshaped to \(H_W\times W_W\) using the uploaded reference watermark dimensions. The same reference is then compared with the extracted sample array. Extraction without the original cover or reference watermark is rejected.
+The permutation is inverted when a key was supplied, and the resulting vector is reshaped to the fitted watermark dimensions for comparison with the fitted reference. If resizing was required, the extracted image is enlarged to the reference's original dimensions for display; enlargement does not restore discarded details. Extraction without the original cover or reference watermark is rejected.
 
 ### 4.5 Limitations of the method
 
@@ -180,7 +180,7 @@ $$
 \frac{\sum_i x_i y_i}{\sqrt{\sum_i x_i^2}\sqrt{\sum_i y_i^2}}.
 $$
 
-The inputs are corresponding normalized reference and extracted samples in \([0,1]\). A zero-vector comparison is undefined and rejected. BER thresholds both arrays at 0.5:
+The inputs are corresponding normalized reference and extracted samples in \([0,1]\). For the zero-vector edge case, NC is defined as 1 when both arrays are zero and 0 when exactly one is zero. This allows a valid black watermark to be evaluated without treating a zero extraction of a nonzero reference as successful. BER thresholds both arrays at 0.5:
 
 $$
 \operatorname{BER}(x,y)=
@@ -247,7 +247,7 @@ These results show that quality scores alone do not imply watermark recovery: fo
 The automated tests use generated arrays, not a real-world image dataset. They verify:
 
 - DWT reconstruction, including an odd image shape and multilevel decomposition;
-- block SVD output, embedding dimensions, and capacity rejection;
+- block SVD output, automatic capacity fitting, and extraction;
 - clean non-blind recovery with the true reference watermark;
 - that the deterministic lossy recovery case does not incorrectly return perfect NC or zero BER;
 - extraction rejection when required reference data is missing;
@@ -261,7 +261,7 @@ Run:
 python -m pytest -q
 ```
 
-Latest observed result after the implementation changes: **19 passed**. This validates the present assertions, not broad generalization or resilience claims.
+Latest observed result after the implementation changes: **25 passed**. This validates the present assertions, not broad generalization or resilience claims.
 
 ## 8. Security and Deployment Notes
 

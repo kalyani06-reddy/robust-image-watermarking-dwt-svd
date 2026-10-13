@@ -28,6 +28,15 @@ def test_ber_rejects_values_outside_normalized_range():
         bit_error_rate(np.array([0.0, 2.0]), np.array([0.0, 1.0]))
 
 
-def test_nc_rejects_zero_watermarks():
-    with pytest.raises(ValueError, match="undefined for a zero"):
-        normalized_correlation(np.zeros((4,)), np.zeros((4,)))
+def test_nc_handles_zero_watermarks_without_fabricating_similarity():
+    zero = np.zeros((4,))
+    nonzero = np.array([0.0, 1.0, 0.0, 1.0])
+    assert normalized_correlation(zero, zero) == 1.0
+    assert normalized_correlation(zero, nonzero) == 0.0
+    assert normalized_correlation(nonzero, zero) == 0.0
+
+
+def test_nc_zero_reference_does_not_score_nonzero_extraction_as_perfect():
+    reference = np.zeros((2, 2))
+    recovered = np.array([[0.0, 0.1], [0.0, 0.0]])
+    assert normalized_correlation(reference, recovered) == 0.0
